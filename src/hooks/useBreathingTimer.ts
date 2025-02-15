@@ -177,28 +177,45 @@ export function useBreathingTimer(): {
       isRecovery: state.isInRecoveryPhase
     });
 
-    // Calculate next phase
-    const nextPhase = !state.isInRecoveryPhase
-      ? (state.currentPhase === 'inhale'
-          ? 'exhale'
-          : state.currentPhase === 'exhale' && state.currentBreath < state.breathsBeforeHold
-            ? 'inhale'
-            : 'hold')
-      : PHASE_ORDER.recovery[
-          Math.min(
-            PHASE_ORDER.recovery.indexOf(state.currentPhase as BreathingPhase) + 1,
-            PHASE_ORDER.recovery.length - 1
-          )
-        ];
+    let nextPhase: BreathingPhase;
 
-    // Handle breath counting and recovery phase
+    if (!state.isInRecoveryPhase) {
+      // Main breathing phase
+      if (state.currentPhase === 'inhale') {
+        nextPhase = 'exhale';
+      } else if (state.currentPhase === 'exhale') {
+        if (state.currentBreath < state.breathsBeforeHold) {
+          nextPhase = 'inhale';
+        } else {
+          nextPhase = 'hold';
+          debugLog('Moving to hold phase');
+        }
+      } else if (state.currentPhase === 'hold') {
+        // After hold, move to recovery inhale
+        nextPhase = 'recovery_inhale';
+        debugLog('Moving to recovery sequence');
+        dispatch({ type: 'SET_RECOVERY_PHASE', payload: true });
+      } else {
+        nextPhase = 'inhale'; // Fallback
+      }
+    } else {
+      // Recovery phase sequence
+      const recoveryPhases = PHASE_ORDER.recovery;
+      const currentIndex = recoveryPhases.indexOf(state.currentPhase as BreathingPhase);
+      
+      if (currentIndex === -1 || currentIndex === recoveryPhases.length - 1) {
+        // If not in recovery sequence or at end, start new round
+        nextPhase = 'inhale';
+        dispatch({ type: 'SET_RECOVERY_PHASE', payload: false });
+      } else {
+        // Move to next recovery phase
+        nextPhase = recoveryPhases[currentIndex + 1];
+      }
+    }
+
+    // Handle breath counting
     if (state.currentPhase === 'exhale' && !state.isInRecoveryPhase) {
       dispatch({ type: 'INCREMENT_BREATH' });
-      
-      if (state.currentBreath >= state.breathsBeforeHold) {
-        debugLog('Entering recovery phase');
-        dispatch({ type: 'SET_RECOVERY_PHASE', payload: true });
-      }
     }
 
     // Handle round transitions
@@ -210,11 +227,14 @@ export function useBreathingTimer(): {
       }
       debugLog('Starting new round:', { nextRound: state.currentRound + 1 });
       dispatch({ type: 'UPDATE_ROUND', payload: state.currentRound + 1 });
-      dispatch({ type: 'SET_RECOVERY_PHASE', payload: false });
     }
 
-    debugLog('Phase transition complete:', { to: nextPhase });
-    dispatch({ type: 'UPDATE_PHASE', payload: nextPhase as BreathingPhase });
+    debugLog('Phase transition complete:', { 
+      from: state.currentPhase, 
+      to: nextPhase,
+      isRecovery: state.isInRecoveryPhase
+    });
+    dispatch({ type: 'UPDATE_PHASE', payload: nextPhase });
   }, [dispatch]); // Minimal deps
 
   // Timer effect (stable dependencies)

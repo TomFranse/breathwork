@@ -25,11 +25,12 @@ const getPhaseLabel = (phase: string, isRecovery: boolean): string => {
   return phase.charAt(0).toUpperCase() + phase.slice(1);
 };
 
-const DebugOverlay = ({ debugInfo, phase, breath, maxBreaths }: {
+const DebugOverlay = ({ debugInfo, phase, breath, maxBreaths, lungVolume }: {
   debugInfo: any;
   phase: string;
   breath: number;
   maxBreaths: number;
+  lungVolume: number;
 }) => (
   <Paper
     sx={{
@@ -49,6 +50,9 @@ const DebugOverlay = ({ debugInfo, phase, breath, maxBreaths }: {
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
       <Typography variant="caption">
         Phase: {phase} ({breath}/{maxBreaths})
+      </Typography>
+      <Typography variant="caption">
+        Lung Volume: {Math.round(lungVolume)}%
       </Typography>
       <Typography variant="caption">
         Progress: {(debugInfo?.progress * 100 || 0).toFixed(1)}%
@@ -96,6 +100,7 @@ export function BreathingCircle() {
           phase={currentPhase}
           breath={currentBreath}
           maxBreaths={breathsBeforeHold}
+          lungVolume={lungVolume}
         />
       )}
       <motion.div
