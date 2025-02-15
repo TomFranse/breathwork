@@ -76,6 +76,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Improved prop types and error handling
   - Added better debug information display
   - Enhanced animation performance
+- Fixed Phase Transition System
+  - Corrected phase sequence definitions in WimHof profile
+  - Implemented type-safe phase transitions with proper validation
+  - Fixed breath counting logic during phase transitions
+  - Added detailed phase transition logging
+  - Restricted sub-phases per main phase (breathing, hold, recover)
+  - Ensured correct phase progression:
+    1. Breathing: inhale → exhale (with breath counting)
+    2. Hold: single hold phase
+    3. Recovery: inhale → hold → let_go
+  - Fixed state validation to focus on transitions rather than intermediate states
 
 ### Removed
 - Removed optional features from initial implementation
