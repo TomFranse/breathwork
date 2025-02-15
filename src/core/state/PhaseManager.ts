@@ -7,7 +7,132 @@ import {
   BreathingError,
   BreathingErrorType
 } from '../profiles/types';
-import { validatePhaseTransition } from './StateValidator';
+
+// Define valid phase transitions explicitly
+type PhaseTransitionMap = {
+  [K in MainPhase]: {
+    validSubPhases: SubPhase[];
+    nextMainPhase: MainPhase;
+    subPhaseOrder: SubPhase[];
+    onTransition: (state: BreathingState) => boolean;
+    onEnter?: (state: BreathingState) => Partial<BreathingState>;
+    onExit?: (state: BreathingState) => Partial<BreathingState>;
+  };
+};
+
+const PHASE_TRANSITIONS: PhaseTransitionMap = {
+  breathing: {
+    validSubPhases: ['inhale', 'exhale'],
+    nextMainPhase: 'hold',
+    subPhaseOrder: ['inhale', 'exhale'],
+    onTransition: (state) => state.phase.breathCount >= state.phase.maxBreaths - 1,
+    onEnter: (state) => ({
+      phase: {
+        main: 'breathing',
+        sub: 'inhale',
+        isRecovery: false,
+        breathCount: 0,
+        maxBreaths: state.phase.maxBreaths
+      }
+    })
+  },
+  hold: {
+    validSubPhases: ['hold'],
+    nextMainPhase: 'recover',
+    subPhaseOrder: ['hold'],
+    onTransition: () => true, // Always transition after hold
+    onEnter: (state) => ({
+      phase: {
+        main: 'hold',
+        sub: 'hold',
+        isRecovery: false,
+        breathCount: 0,
+        maxBreaths: state.phase.maxBreaths
+      }
+    })
+  },
+  recover: {
+    validSubPhases: ['inhale', 'hold', 'let_go'],
+    nextMainPhase: 'complete',
+    subPhaseOrder: ['inhale', 'hold', 'let_go'],
+    onTransition: (state) => true, // Always transition after let_go
+    onEnter: (state) => ({
+      phase: {
+        main: 'recover',
+        sub: 'inhale',
+        isRecovery: true,
+        breathCount: 0,
+        maxBreaths: state.phase.maxBreaths
+      }
+    }),
+    onExit: (state) => {
+      // Handle round transitions
+      if (state.session.currentRound >= state.session.totalRounds) {
+        return {
+          session: {
+            ...state.session,
+            isActive: false,
+            isPaused: false
+          },
+          phase: {
+            main: 'complete',
+            sub: 'inhale',
+            isRecovery: false,
+            breathCount: 0,
+            maxBreaths: state.phase.maxBreaths
+          },
+          animation: {
+            lungVolume: 0,
+            progress: 0
+          }
+        };
+      }
+      // Start new round
+      return {
+        session: {
+          ...state.session,
+          currentRound: state.session.currentRound + 1,
+          isPaused: false
+        },
+        phase: {
+          main: 'breathing',
+          sub: 'inhale',
+          isRecovery: false,
+          breathCount: 0,
+          maxBreaths: state.phase.maxBreaths
+        },
+        animation: {
+          lungVolume: 0,
+          progress: 0
+        }
+      };
+    }
+  },
+  complete: {
+    validSubPhases: ['inhale'],
+    nextMainPhase: 'complete',
+    subPhaseOrder: ['inhale'],
+    onTransition: () => false, // Never transition from complete
+    onEnter: (state) => ({
+      session: {
+        ...state.session,
+        isActive: false,
+        isPaused: false
+      },
+      phase: {
+        main: 'complete',
+        sub: 'inhale',
+        isRecovery: false,
+        breathCount: 0,
+        maxBreaths: state.phase.maxBreaths
+      },
+      animation: {
+        lungVolume: 0,
+        progress: 0
+      }
+    })
+  }
+};
 
 export interface PhaseManagerConfig {
   sequences: PhaseSequences;
@@ -26,150 +151,95 @@ export class PhaseManager {
     this.onError = config.onError;
   }
 
+  private getNextSubPhase(currentState: BreathingState): SubPhase {
+    const { main, sub } = currentState.phase;
+    const { subPhaseOrder } = PHASE_TRANSITIONS[main];
+    
+    const currentIndex = subPhaseOrder.indexOf(sub);
+    return currentIndex < subPhaseOrder.length - 1 
+      ? subPhaseOrder[currentIndex + 1] 
+      : subPhaseOrder[0];
+  }
+
+  private shouldTransitionMainPhase(currentState: BreathingState): boolean {
+    const { main, sub } = currentState.phase;
+    const phaseConfig = PHASE_TRANSITIONS[main];
+    
+    // Only check for main phase transition at the end of sub-phase sequence
+    const isLastSubPhase = sub === phaseConfig.subPhaseOrder[phaseConfig.subPhaseOrder.length - 1];
+    return isLastSubPhase && phaseConfig.onTransition(currentState);
+  }
+
   moveToNextPhase(currentState: BreathingState): void {
     try {
       const { main: currentMain, sub: currentSub } = currentState.phase;
+      const currentPhaseConfig = PHASE_TRANSITIONS[currentMain];
 
-      // Handle complete phase
-      if (currentMain === 'complete') {
-        return;
-      }
-
-      const sequence = this.sequences[currentMain as keyof PhaseSequences];
-
-      if (!sequence) {
+      // Validate current state
+      if (!currentPhaseConfig.validSubPhases.includes(currentSub)) {
         throw new BreathingError(
           BreathingErrorType.INVALID_PHASE_TRANSITION,
-          `No sequence defined for main phase ${currentMain}`,
+          `Invalid sub-phase ${currentSub} for main phase ${currentMain}`,
           { currentState }
         );
       }
 
-      // Type guard to ensure we have the right sequence type
-      const transition = (() => {
-        switch (currentMain) {
-          case 'breathing':
-            return (sequence as Record<SubPhase, PhaseTransition>)[currentSub];
-          case 'hold':
-            return (sequence as { hold: PhaseTransition }).hold;
-          case 'recover':
-            return (sequence as { inhale: PhaseTransition; hold: PhaseTransition; let_go: PhaseTransition })[currentSub];
-          default:
-            throw new BreathingError(
-              BreathingErrorType.INVALID_PHASE_TRANSITION,
-              `Invalid main phase ${currentMain}`,
-              { currentState }
-            );
-        }
-      })();
+      let updates: Partial<BreathingState> = {};
 
-      if (!transition) {
-        throw new BreathingError(
-          BreathingErrorType.INVALID_PHASE_TRANSITION,
-          `No transition defined for sub phase ${currentSub} in ${currentMain}`,
-          { currentState }
-        );
-      }
-
-      // Calculate next breath count first
-      let nextBreathCount = currentState.phase.breathCount;
+      // Handle breath counting in breathing phase
       if (currentMain === 'breathing' && currentSub === 'exhale') {
-        nextBreathCount = currentState.phase.breathCount + 1;
-      }
-
-      // Get next phase from sequence, passing state with updated breath count
-      const stateWithUpdatedCount = {
-        ...currentState,
-        phase: {
-          ...currentState.phase,
-          breathCount: nextBreathCount
-        }
-      };
-      
-      const nextPhase = typeof transition.next === 'function'
-        ? transition.next(stateWithUpdatedCount)
-        : transition.next;
-
-      // Initialize state updates with phase from sequence
-      const updates: Partial<BreathingState> = {
-        phase: {
-          main: nextPhase.main,
-          sub: nextPhase.sub,
-          isRecovery: nextPhase.main === 'recover',
-          breathCount: nextBreathCount,
-          maxBreaths: currentState.phase.maxBreaths
-        },
-        animation: {
-          lungVolume: currentState.animation.lungVolume,
-          progress: 0
-        }
-      };
-
-      // Reset breath count when transitioning to a new main phase
-      if (nextPhase.main !== currentMain) {
         updates.phase = {
-          main: nextPhase.main,
-          sub: nextPhase.sub,
-          isRecovery: nextPhase.main === 'recover',
-          breathCount: 0,
+          main: currentMain,
+          sub: currentSub,
+          isRecovery: false,
+          breathCount: currentState.phase.breathCount + 1,
           maxBreaths: currentState.phase.maxBreaths
         };
       }
 
-      // Handle round transitions
-      if (currentMain === 'recover' && currentSub === 'let_go') {
-        if (currentState.session.currentRound >= currentState.session.totalRounds) {
-          // Session complete
-          updates.session = {
-            ...currentState.session,
-            isActive: false,
-            isPaused: false
-          };
-          updates.phase = {
-            main: 'complete',
-            sub: 'inhale',
-            isRecovery: false,
-            breathCount: 0,
-            maxBreaths: currentState.phase.maxBreaths
-          };
-        } else {
-          // Complete state reset for new round
-          updates.session = {
-            ...currentState.session,
-            currentRound: currentState.session.currentRound + 1,
-            isPaused: false
-          };
-          updates.phase = {
-            main: 'breathing',
-            sub: 'inhale',
-            isRecovery: false,
-            breathCount: 0,
-            maxBreaths: currentState.phase.maxBreaths
-          };
+      // Check if we should transition to next main phase
+      if (this.shouldTransitionMainPhase(currentState)) {
+        const nextMain = currentPhaseConfig.nextMainPhase;
+        const nextPhaseConfig = PHASE_TRANSITIONS[nextMain];
+
+        // Apply exit handlers
+        if (currentPhaseConfig.onExit) {
+          updates = { ...updates, ...currentPhaseConfig.onExit(currentState) };
+        }
+
+        // Apply enter handlers
+        if (nextPhaseConfig.onEnter) {
+          updates = { ...updates, ...nextPhaseConfig.onEnter(currentState) };
+        }
+      } else {
+        // Just move to next sub-phase
+        const nextSub = this.getNextSubPhase(currentState);
+        updates.phase = {
+          main: currentMain,
+          sub: nextSub,
+          isRecovery: currentMain === 'recover',
+          breathCount: currentState.phase.breathCount,
+          maxBreaths: currentState.phase.maxBreaths
+        };
+      }
+
+      // Set animation updates based on next phase
+      if (currentMain !== 'complete') {
+        const sequence = this.sequences[currentMain as keyof PhaseSequences];
+        const transition = sequence[currentSub];
+        if (transition.volume !== 'maintain') {
           updates.animation = {
-            lungVolume: 0,
+            lungVolume: transition.volume,
             progress: 0
           };
-          updates.timing = {
-            ...currentState.timing
-          };
         }
-      }
-
-      // Set lung volume based on the transition
-      if (transition.volume !== 'maintain') {
-        updates.animation = {
-          lungVolume: transition.volume,
-          progress: 0
-        };
       }
 
       // Debug log for phase transitions
       console.log('Phase transition:', {
         from: `${currentMain}/${currentSub}`,
-        to: `${nextPhase.main}/${nextPhase.sub}`,
-        breathCount: nextBreathCount,
-        maxBreaths: currentState.phase.maxBreaths
+        to: updates.phase ? `${updates.phase.main}/${updates.phase.sub}` : 'no phase update',
+        state: updates
       });
 
       this.onStateChange(updates);
@@ -193,25 +263,27 @@ export class PhaseManager {
     }
 
     const sequence = this.sequences[currentMain as keyof PhaseSequences];
-
     if (!sequence) {
-      throw new BreathingError(
-        BreathingErrorType.INVALID_STATE,
-        `No sequence defined for main phase ${currentMain}`,
-        { currentState }
-      );
+      return 0;
     }
 
-    const transition = sequence[currentSub];
-    if (!transition) {
-      throw new BreathingError(
-        BreathingErrorType.INVALID_STATE,
-        `No transition defined for sub phase ${currentSub} in ${currentMain}`,
-        { currentState }
-      );
+    // Type guard for sequence access
+    let transition: PhaseTransition | undefined;
+    switch (currentMain) {
+      case 'breathing':
+        transition = (sequence as Record<SubPhase, PhaseTransition>)[currentSub];
+        break;
+      case 'hold':
+        transition = (sequence as { hold: PhaseTransition }).hold;
+        break;
+      case 'recover':
+        transition = (sequence as { inhale: PhaseTransition; hold: PhaseTransition; let_go: PhaseTransition })[currentSub];
+        break;
+      default:
+        return 0;
     }
 
-    if (transition.volume === 'maintain') {
+    if (!transition || transition.volume === 'maintain') {
       return currentState.animation.lungVolume;
     }
 
