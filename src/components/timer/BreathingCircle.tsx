@@ -29,6 +29,12 @@ const DebugOverlay = ({
     phaseDuration: number;
     progress: number;
     nextPhaseIn: number;
+    mainPhase: {
+      totalDuration: number;
+      elapsedTime: number;
+      progress: number;
+      timeLeft: number;
+    };
   };
   mainPhase: string;
   subPhase: string;
@@ -66,15 +72,34 @@ const DebugOverlay = ({
       <Typography variant="caption">
         Lung Volume: {Math.round(lungVolume)}%
       </Typography>
-      <Typography variant="caption">
-        Progress: {(debugInfo.progress * 100).toFixed(1)}%
-      </Typography>
-      <Typography variant="caption">
-        Time Left: {(debugInfo.nextPhaseIn / 1000).toFixed(1)}s
-      </Typography>
-      <Typography variant="caption">
-        Duration: {(debugInfo.phaseDuration / 1000).toFixed(1)}s
-      </Typography>
+      <Box sx={{ mt: 1, mb: 1, borderTop: '1px solid rgba(0,0,0,0.1)', pt: 1 }}>
+        <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+          Main Phase ({mainPhase}):
+        </Typography>
+        <Typography variant="caption" sx={{ ml: 2, display: 'block' }}>
+          Progress: {(debugInfo.mainPhase.progress * 100).toFixed(1)}%
+        </Typography>
+        <Typography variant="caption" sx={{ ml: 2, display: 'block' }}>
+          Time Left: {(debugInfo.mainPhase.timeLeft / 1000).toFixed(1)}s
+        </Typography>
+        <Typography variant="caption" sx={{ ml: 2, display: 'block', color: 'text.secondary' }}>
+          Total Duration: {(debugInfo.mainPhase.totalDuration / 1000).toFixed(1)}s
+        </Typography>
+      </Box>
+      <Box sx={{ borderTop: '1px solid rgba(0,0,0,0.1)', pt: 1 }}>
+        <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+          Sub Phase ({subPhase}):
+        </Typography>
+        <Typography variant="caption" sx={{ ml: 2, display: 'block' }}>
+          Progress: {(debugInfo.progress * 100).toFixed(1)}%
+        </Typography>
+        <Typography variant="caption" sx={{ ml: 2, display: 'block' }}>
+          Time Left: {(debugInfo.nextPhaseIn / 1000).toFixed(1)}s
+        </Typography>
+        <Typography variant="caption" sx={{ ml: 2, display: 'block', color: 'text.secondary' }}>
+          Total Duration: {(debugInfo.phaseDuration / 1000).toFixed(1)}s
+        </Typography>
+      </Box>
     </Box>
   </Paper>
 );

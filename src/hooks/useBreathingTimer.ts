@@ -21,6 +21,12 @@ interface TimerState {
   phaseDuration: number;
   progress: number;
   nextPhaseIn: number;
+  mainPhase: {
+    totalDuration: number;
+    elapsedTime: number;
+    progress: number;
+    timeLeft: number;
+  };
 }
 
 export function useBreathingTimer() {
@@ -35,11 +41,18 @@ export function useBreathingTimer() {
   const timerRef = useRef<BreathingTimer | null>(null);
   const stateRef = useRef(state);
   const phaseManagerRef = useRef(phaseManager);
+  const mainPhaseStartTime = useRef<number>(0);
   const debugInfoRef = useRef<TimerState>({
     elapsedTime: 0,
     phaseDuration: 0,
     progress: 0,
     nextPhaseIn: 0,
+    mainPhase: {
+      totalDuration: 0,
+      elapsedTime: 0,
+      progress: 0,
+      timeLeft: 0,
+    },
   });
 
   // Update refs when dependencies change
@@ -48,7 +61,32 @@ export function useBreathingTimer() {
     phaseManagerRef.current = phaseManager;
   }, [state, phaseManager]);
 
-  // Calculate phase duration
+  // Reset main phase timer when main phase changes
+  useEffect(() => {
+    mainPhaseStartTime.current = Date.now();
+  }, [mainPhase]);
+
+  // Calculate total duration for main phase
+  const getMainPhaseDuration = useCallback((phase: MainPhase): number => {
+    const { timing } = stateRef.current;
+    switch (phase) {
+      case 'breathing':
+        return timing.inhaleTime * 2 * maxBreaths * 1000; // inhale + exhale for each breath
+      case 'hold':
+        return timing.holdTime * 1000;
+      case 'recover':
+        return (timing.inhaleTime + RECOVERY_HOLD_TIME + timing.inhaleTime) * 1000; // inhale + hold + exhale
+      case 'complete':
+        return 0;
+      default:
+        throw new BreathingError(
+          BreathingErrorType.INVALID_STATE,
+          `Invalid main phase: ${phase}`
+        );
+    }
+  }, [maxBreaths]);
+
+  // Calculate phase duration for sub-phase
   const getPhaseDuration = useCallback((phase: { main: MainPhase, sub: SubPhase }): number => {
     if (phase.main === 'complete') {
       return 0;
@@ -87,17 +125,26 @@ export function useBreathingTimer() {
               return;
             }
 
-            const phaseDuration = getPhaseDuration({
+            const subPhaseDuration = getPhaseDuration({
               main: currentState.phase.main,
               sub: currentState.phase.sub
             });
+
+            const mainPhaseDuration = getMainPhaseDuration(currentState.phase.main);
+            const mainPhaseElapsed = Date.now() - mainPhaseStartTime.current;
             
             // Update debug info
             debugInfoRef.current = {
-              elapsedTime: progress * phaseDuration,
-              phaseDuration,
+              elapsedTime: progress * subPhaseDuration,
+              phaseDuration: subPhaseDuration,
               progress,
-              nextPhaseIn: phaseDuration * (1 - progress),
+              nextPhaseIn: subPhaseDuration * (1 - progress),
+              mainPhase: {
+                totalDuration: mainPhaseDuration,
+                elapsedTime: mainPhaseElapsed,
+                progress: Math.min(mainPhaseElapsed / mainPhaseDuration, 1),
+                timeLeft: Math.max(mainPhaseDuration - mainPhaseElapsed, 0),
+              },
             };
 
             // Calculate and update lung volume
@@ -144,7 +191,7 @@ export function useBreathingTimer() {
         timerRef.current = null;
       }
     };
-  }, [dispatch, getPhaseDuration]);
+  }, [dispatch, getPhaseDuration, getMainPhaseDuration]);
 
   // Handle timer state
   useEffect(() => {
@@ -157,7 +204,8 @@ export function useBreathingTimer() {
     const phaseDuration = getPhaseDuration({ main: mainPhase, sub: subPhase });
     debugLog('Starting new phase:', {
       phase: `${mainPhase}/${subPhase}`,
-      duration: phaseDuration / 1000
+      duration: phaseDuration / 1000,
+      mainPhaseDuration: getMainPhaseDuration(mainPhase) / 1000,
     });
 
     timerRef.current?.start(phaseDuration);
@@ -165,7 +213,7 @@ export function useBreathingTimer() {
     return () => {
       timerRef.current?.stop();
     };
-  }, [isActive, isPaused, mainPhase, subPhase, getPhaseDuration]);
+  }, [isActive, isPaused, mainPhase, subPhase, getPhaseDuration, getMainPhaseDuration]);
 
   return {
     currentPhase: { main: mainPhase, sub: subPhase },
