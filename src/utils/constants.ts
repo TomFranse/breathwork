@@ -11,10 +11,10 @@ export const DEFAULT_THEME: Theme = {
 };
 
 export const DEFAULT_BREATHING_SETTINGS: BreathingSettings = {
-  breathsBeforeHold: 30,     // 30 breaths before hold
-  inhaleExhaleTime: 2,       // 2 seconds for inhale/exhale
-  breathHoldTarget: 90,      // 1.5 minutes max hold
-  numberOfRounds: 3,         // 3 rounds default
+  breathsBeforeHold: 1,      // 1 breath before hold (for testing)
+  inhaleExhaleTime: 1,       // 1 second for inhale/exhale
+  breathHoldTarget: 1,       // 1 second hold (for testing)
+  numberOfRounds: 1,         // 1 round (for testing)
 };
 
 export const RECOVERY_HOLD_TIME = 15; // 15 seconds fixed recovery hold

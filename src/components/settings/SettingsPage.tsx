@@ -40,7 +40,7 @@ export function SettingsPage() {
           <BreathingSlider
             label="Breaths before Hold"
             value={maxBreaths}
-            min={20}
+            min={1}
             max={50}
             settingKey="breathsBeforeHold"
           />
@@ -48,7 +48,7 @@ export function SettingsPage() {
           <BreathingSlider
             label="Inhale/Exhale Time"
             value={inhaleTime}
-            min={1}
+            min={0.5}
             max={5}
             step={0.5}
             unit="s"
@@ -58,9 +58,9 @@ export function SettingsPage() {
           <BreathingSlider
             label="Breath Hold Target"
             value={holdTime}
-            min={30}
+            min={1}
             max={180}
-            step={5}
+            step={1}
             unit="s"
             settingKey="breathHoldTarget"
           />

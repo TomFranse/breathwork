@@ -26,10 +26,18 @@ const WimHofProfile: BreathingProfile = {
         volume: 100,
       },
       exhale: {
-        next: (state: BreathingState) => ({
-          main: state.phase.breathCount < state.phase.maxBreaths ? 'breathing' : 'hold',
-          sub: state.phase.breathCount < state.phase.maxBreaths ? 'inhale' : 'hold'
-        }),
+        next: (state: BreathingState) => {
+          if (state.phase.breathCount >= state.phase.maxBreaths - 1) {
+            return {
+              main: 'hold',
+              sub: 'hold'
+            };
+          }
+          return {
+            main: 'breathing',
+            sub: 'inhale'
+          };
+        },
         volume: 0,
       },
       hold: {
@@ -48,33 +56,12 @@ const WimHofProfile: BreathingProfile = {
       },
     },
     hold: {
-      inhale: {
-        next: (state: BreathingState) => ({
-          main: 'hold',
-          sub: 'hold'
-        }),
-        volume: 100,
-      },
-      exhale: {
-        next: (state: BreathingState) => ({
-          main: 'hold',
-          sub: 'hold'
-        }),
-        volume: 0,
-      },
       hold: {
         next: (state: BreathingState) => ({
           main: 'recover',
           sub: 'inhale'
         }),
         volume: 'maintain',
-      },
-      let_go: {
-        next: (state: BreathingState) => ({
-          main: 'breathing',
-          sub: 'inhale'
-        }),
-        volume: 0,
       },
     },
     recover: {
@@ -84,13 +71,6 @@ const WimHofProfile: BreathingProfile = {
           sub: 'hold'
         }),
         volume: 100,
-      },
-      exhale: {
-        next: (state: BreathingState) => ({
-          main: 'breathing',
-          sub: 'inhale'
-        }),
-        volume: 0,
       },
       hold: {
         next: (state: BreathingState) => ({

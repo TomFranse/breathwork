@@ -1,37 +1,46 @@
 import { 
   BreathingState, 
-  BreathingPhase, 
+  MainPhase,
+  SubPhase,
   BreathingError, 
   BreathingErrorType,
   PhaseSequences
 } from '../profiles/types';
 
 export function validatePhaseTransition(
-  from: BreathingPhase,
-  to: BreathingPhase,
-  state: BreathingState,
+  prevState: BreathingState,
+  nextState: BreathingState,
   sequences: PhaseSequences
 ): void {
-  const currentSequence = state.phase.isRecovery ? sequences.recovery : sequences.main;
-  const allowedTransition = currentSequence[from];
+  const sequence = sequences[prevState.phase.main as keyof PhaseSequences];
 
-  if (!allowedTransition) {
+  if (!sequence) {
     throw new BreathingError(
       BreathingErrorType.INVALID_PHASE_TRANSITION,
-      `Invalid phase transition from ${from}`,
-      { from, to, state }
+      `No sequence defined for main phase ${prevState.phase.main}`,
+      { prevState, nextState }
     );
   }
 
-  const nextPhase = typeof allowedTransition.next === 'function'
-    ? allowedTransition.next(state)
-    : allowedTransition.next;
-
-  if (nextPhase !== to) {
+  const transition = sequence[prevState.phase.sub];
+  if (!transition) {
     throw new BreathingError(
       BreathingErrorType.INVALID_PHASE_TRANSITION,
-      `Invalid phase transition from ${from} to ${to}`,
-      { from, to, expected: nextPhase, state }
+      `No transition defined for sub phase ${prevState.phase.sub} in ${prevState.phase.main}`,
+      { prevState, nextState }
+    );
+  }
+
+  const expectedNextPhase = typeof transition.next === 'function'
+    ? transition.next(prevState)
+    : transition.next;
+
+  if (nextState.phase.main !== expectedNextPhase.main || 
+      nextState.phase.sub !== expectedNextPhase.sub) {
+    throw new BreathingError(
+      BreathingErrorType.INVALID_PHASE_TRANSITION,
+      `Invalid phase transition from ${prevState.phase.main}/${prevState.phase.sub} to ${nextState.phase.main}/${nextState.phase.sub}`,
+      { prevState, nextState, expected: expectedNextPhase }
     );
   }
 }
@@ -46,11 +55,11 @@ export function validateBreathingState(state: BreathingState): void {
     );
   }
 
-  // Validate phase state
-  if (state.phase.breathCount > state.phase.maxBreaths) {
+  // Validate breath count range
+  if (state.phase.breathCount < 0) {
     throw new BreathingError(
       BreathingErrorType.INVALID_STATE,
-      'Breath count exceeds maximum breaths',
+      'Breath count cannot be negative',
       { state }
     );
   }
@@ -87,17 +96,35 @@ export function validateStateTransition(
   nextState: BreathingState,
   sequences: PhaseSequences
 ): void {
-  // Validate the new state
+  // Validate both states individually
+  validateBreathingState(prevState);
   validateBreathingState(nextState);
 
   // If phase changed, validate the transition
-  if (prevState.phase.current !== nextState.phase.current) {
-    validatePhaseTransition(
-      prevState.phase.current,
-      nextState.phase.current,
-      prevState,
-      sequences
-    );
+  if (prevState.phase.main !== nextState.phase.main || 
+      prevState.phase.sub !== nextState.phase.sub) {
+    validatePhaseTransition(prevState, nextState, sequences);
+  }
+
+  // Validate breath count transitions
+  if (prevState.phase.main === 'breathing' && nextState.phase.main === 'breathing') {
+    // Within breathing phase, breath count can only increase during exhale->inhale transition
+    if (prevState.phase.sub === 'exhale' && nextState.phase.sub === 'inhale') {
+      if (nextState.phase.breathCount !== prevState.phase.breathCount + 1) {
+        throw new BreathingError(
+          BreathingErrorType.INVALID_STATE,
+          'Breath count must increment by 1 during exhale->inhale transition',
+          { prevState, nextState }
+        );
+      }
+    } else if (nextState.phase.breathCount !== prevState.phase.breathCount) {
+      // Breath count should remain the same during other transitions
+      throw new BreathingError(
+        BreathingErrorType.INVALID_STATE,
+        'Breath count cannot change during this transition',
+        { prevState, nextState }
+      );
+    }
   }
 
   // Validate round transitions
@@ -109,16 +136,5 @@ export function validateStateTransition(
         { prevState, nextState }
       );
     }
-  }
-
-  // Validate breath count transitions
-  if (nextState.phase.breathCount < prevState.phase.breathCount && 
-      nextState.phase.current !== 'inhale' &&
-      !nextState.phase.isRecovery) {
-    throw new BreathingError(
-      BreathingErrorType.INVALID_STATE,
-      'Invalid breath count transition',
-      { prevState, nextState }
-    );
   }
 } 

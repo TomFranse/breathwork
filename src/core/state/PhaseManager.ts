@@ -3,6 +3,7 @@ import {
   MainPhase,
   SubPhase,
   PhaseSequences,
+  PhaseTransition,
   BreathingError,
   BreathingErrorType
 } from '../profiles/types';
@@ -44,7 +45,24 @@ export class PhaseManager {
         );
       }
 
-      const transition = sequence[currentSub];
+      // Type guard to ensure we have the right sequence type
+      const transition = (() => {
+        switch (currentMain) {
+          case 'breathing':
+            return (sequence as Record<SubPhase, PhaseTransition>)[currentSub];
+          case 'hold':
+            return (sequence as { hold: PhaseTransition }).hold;
+          case 'recover':
+            return (sequence as { inhale: PhaseTransition; hold: PhaseTransition; let_go: PhaseTransition })[currentSub];
+          default:
+            throw new BreathingError(
+              BreathingErrorType.INVALID_PHASE_TRANSITION,
+              `Invalid main phase ${currentMain}`,
+              { currentState }
+            );
+        }
+      })();
+
       if (!transition) {
         throw new BreathingError(
           BreathingErrorType.INVALID_PHASE_TRANSITION,
@@ -53,17 +71,32 @@ export class PhaseManager {
         );
       }
 
+      // Calculate next breath count first
+      let nextBreathCount = currentState.phase.breathCount;
+      if (currentMain === 'breathing' && currentSub === 'exhale') {
+        nextBreathCount = currentState.phase.breathCount + 1;
+      }
+
+      // Get next phase from sequence, passing state with updated breath count
+      const stateWithUpdatedCount = {
+        ...currentState,
+        phase: {
+          ...currentState.phase,
+          breathCount: nextBreathCount
+        }
+      };
+      
       const nextPhase = typeof transition.next === 'function'
-        ? transition.next(currentState)
+        ? transition.next(stateWithUpdatedCount)
         : transition.next;
 
-      // Initialize state updates with required fields
+      // Initialize state updates with phase from sequence
       const updates: Partial<BreathingState> = {
         phase: {
           main: nextPhase.main,
           sub: nextPhase.sub,
           isRecovery: nextPhase.main === 'recover',
-          breathCount: currentState.phase.breathCount,
+          breathCount: nextBreathCount,
           maxBreaths: currentState.phase.maxBreaths
         },
         animation: {
@@ -72,13 +105,15 @@ export class PhaseManager {
         }
       };
 
-      // Handle breath counting
-      if (currentMain === 'breathing' && currentSub === 'exhale') {
-        const newBreathCount = currentState.phase.breathCount + 1;
+      // Reset breath count when transitioning to a new main phase
+      if (nextPhase.main !== currentMain) {
         updates.phase = {
-          ...updates.phase,
-          breathCount: newBreathCount,
-        } as BreathingState['phase'];
+          main: nextPhase.main,
+          sub: nextPhase.sub,
+          isRecovery: nextPhase.main === 'recover',
+          breathCount: 0,
+          maxBreaths: currentState.phase.maxBreaths
+        };
       }
 
       // Handle round transitions
@@ -128,6 +163,14 @@ export class PhaseManager {
           progress: 0
         };
       }
+
+      // Debug log for phase transitions
+      console.log('Phase transition:', {
+        from: `${currentMain}/${currentSub}`,
+        to: `${nextPhase.main}/${nextPhase.sub}`,
+        breathCount: nextBreathCount,
+        maxBreaths: currentState.phase.maxBreaths
+      });
 
       this.onStateChange(updates);
     } catch (error) {

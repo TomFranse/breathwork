@@ -22,10 +22,17 @@ export interface PhaseTransition {
   volume: number | 'maintain';
 }
 
+// Each phase has its own set of allowed sub-phases
 export interface PhaseSequences {
   breathing: Record<SubPhase, PhaseTransition>;
-  hold: Record<SubPhase, PhaseTransition>;
-  recover: Record<SubPhase, PhaseTransition>;
+  hold: {
+    hold: PhaseTransition;
+  };
+  recover: {
+    inhale: PhaseTransition;
+    hold: PhaseTransition;
+    let_go: PhaseTransition;
+  };
 }
 
 export interface BreathingProfile {

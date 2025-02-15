@@ -127,7 +127,22 @@ function breathingReducer(state: BreathingState, action: Action): BreathingState
       case 'UPDATE_STATE':
         newState = {
           ...state,
-          ...action.payload,
+          session: {
+            ...state.session,
+            ...(action.payload.session || {}),
+          },
+          phase: {
+            ...state.phase,
+            ...(action.payload.phase || {}),
+          },
+          timing: {
+            ...state.timing,
+            ...(action.payload.timing || {}),
+          },
+          animation: {
+            ...state.animation,
+            ...(action.payload.animation || {}),
+          },
         };
         break;
 
