@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Typography, Paper } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useBreathingTimer } from '../../hooks/useBreathingTimer';
+import { MainPhase, SubPhase } from '../../core/profiles/types';
 
 const CIRCLE_SIZE = {
   min: 200,
@@ -15,18 +16,10 @@ const getLungScale = (volume: number) => {
   return minScale + (maxScale - minScale) * (volume / 100);
 };
 
-const getPhaseLabel = (phase: string, isRecovery: boolean): string => {
-  if (phase === 'hold') return 'Hold';
-  if (phase === 'recovery_hold') return 'Recovery Hold';
-  if (phase.startsWith('recovery_')) {
-    return phase.split('_')[1].charAt(0).toUpperCase() + phase.split('_')[1].slice(1);
-  }
-  return phase.charAt(0).toUpperCase() + phase.slice(1);
-};
-
 const DebugOverlay = ({ 
   debugInfo, 
-  phase, 
+  mainPhase,
+  subPhase,
   breath, 
   maxBreaths, 
   lungVolume 
@@ -37,7 +30,8 @@ const DebugOverlay = ({
     progress: number;
     nextPhaseIn: number;
   };
-  phase: string;
+  mainPhase: string;
+  subPhase: string;
   breath: number;
   maxBreaths: number;
   lungVolume: number;
@@ -58,9 +52,17 @@ const DebugOverlay = ({
   >
     <Typography variant="subtitle2" color="primary">Debug Info</Typography>
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-      <Typography variant="caption">
-        Phase: {phase} ({breath}/{maxBreaths})
+      <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+        Phase: {mainPhase}
       </Typography>
+      <Typography variant="caption" sx={{ ml: 2 }}>
+        Sub-phase: {subPhase}
+      </Typography>
+      {mainPhase === 'breathing' && (
+        <Typography variant="caption" sx={{ ml: 2 }}>
+          Breath: {breath}/{maxBreaths}
+        </Typography>
+      )}
       <Typography variant="caption">
         Lung Volume: {Math.round(lungVolume)}%
       </Typography>
@@ -77,9 +79,15 @@ const DebugOverlay = ({
   </Paper>
 );
 
+const getPhaseLabel = (mainPhase: MainPhase | undefined, subPhase: SubPhase | undefined): string => {
+  if (!mainPhase || !subPhase) return 'Starting...';
+  if (subPhase === 'let_go') return 'Let Go';
+  return subPhase.charAt(0).toUpperCase() + subPhase.slice(1);
+};
+
 export function BreathingCircle() {
   const { 
-    currentPhase, 
+    currentPhase: { main: mainPhase, sub: subPhase }, 
     breathCount,
     maxBreaths,
     isPaused, 
@@ -104,7 +112,8 @@ export function BreathingCircle() {
       {debugInfo && (
         <DebugOverlay
           debugInfo={debugInfo}
-          phase={currentPhase}
+          mainPhase={mainPhase}
+          subPhase={subPhase}
           breath={breathCount}
           maxBreaths={maxBreaths}
           lungVolume={lungVolume}
@@ -112,7 +121,8 @@ export function BreathingCircle() {
       )}
       <motion.div
         animate={{
-          scale: getLungScale(lungVolume)
+          scale: getLungScale(lungVolume),
+          opacity: mainPhase === 'complete' ? 0 : 1
         }}
         transition={{
           duration: 0.016, // Approximately 1 frame at 60fps
@@ -150,11 +160,11 @@ export function BreathingCircle() {
               textTransform: 'capitalize',
             }}
           >
-            {isPaused ? 'Paused' : getPhaseLabel(currentPhase, isRecovery)}
+            {isPaused ? 'Paused' : getPhaseLabel(mainPhase, subPhase)}
           </Typography>
           <AnimatePresence mode="wait">
             <motion.div
-              key={isPaused ? 'paused' : currentPhase}
+              key={isPaused ? 'paused' : `${mainPhase}-${subPhase}`}
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -5 }}
@@ -165,15 +175,22 @@ export function BreathingCircle() {
                 sx={{
                   color: 'text.secondary',
                   fontWeight: 400,
+                  textAlign: 'center'
                 }}
               >
                 {isPaused ? (
                   'Press play to continue'
                 ) : (
                   <>
-                    {debugInfo && `${(debugInfo.phaseDuration / 1000).toFixed(1)}s`}
-                    {!isRecovery && !currentPhase.includes('hold') && (
-                      <span> • Breath {breathCount}/{maxBreaths}</span>
+                    {mainPhase === 'breathing' && (
+                      <Box component="span" sx={{ display: 'block' }}>
+                        Breath {breathCount}/{maxBreaths}
+                      </Box>
+                    )}
+                    {debugInfo && (
+                      <Box component="span" sx={{ display: 'block', mt: 0.5, fontSize: '0.9em' }}>
+                        {(debugInfo.phaseDuration / 1000).toFixed(1)}s
+                      </Box>
                     )}
                   </>
                 )}

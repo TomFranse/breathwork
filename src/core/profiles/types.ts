@@ -1,10 +1,14 @@
-export type BreathingPhase = 
+export type MainPhase = 
+  | 'breathing'
+  | 'hold'
+  | 'recover'
+  | 'complete';
+
+export type SubPhase = 
   | 'inhale'
   | 'exhale'
   | 'hold'
-  | 'recovery_inhale'
-  | 'recovery_hold'
-  | 'recovery_exhale';
+  | 'let_go';
 
 export interface BreathingSettings {
   breathsBeforeHold: number;
@@ -14,13 +18,14 @@ export interface BreathingSettings {
 }
 
 export interface PhaseTransition {
-  next: BreathingPhase | ((state: BreathingState) => BreathingPhase);
+  next: { main: MainPhase; sub: SubPhase } | ((state: BreathingState) => { main: MainPhase; sub: SubPhase });
   volume: number | 'maintain';
 }
 
 export interface PhaseSequences {
-  main: Record<BreathingPhase, PhaseTransition>;
-  recovery: Record<BreathingPhase, PhaseTransition>;
+  breathing: Record<SubPhase, PhaseTransition>;
+  hold: Record<SubPhase, PhaseTransition>;
+  recover: Record<SubPhase, PhaseTransition>;
 }
 
 export interface BreathingProfile {
@@ -40,10 +45,15 @@ export interface BreathingState {
     totalRounds: number;
   };
   phase: {
-    current: BreathingPhase;
+    main: MainPhase;
+    sub: SubPhase;
     isRecovery: boolean;
     breathCount: number;
     maxBreaths: number;
+    fadeAnimation?: {
+      type: 'in' | 'out';
+      progress: number;
+    };
   };
   timing: {
     inhaleTime: number;

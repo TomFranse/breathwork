@@ -1,6 +1,7 @@
 import { 
   BreathingState, 
-  BreathingPhase,
+  MainPhase,
+  SubPhase,
   PhaseSequences,
   BreathingError,
   BreathingErrorType
@@ -26,16 +27,28 @@ export class PhaseManager {
 
   moveToNextPhase(currentState: BreathingState): void {
     try {
-      const { current: currentPhase } = currentState.phase;
-      const sequence = currentState.phase.isRecovery 
-        ? this.sequences.recovery 
-        : this.sequences.main;
+      const { main: currentMain, sub: currentSub } = currentState.phase;
 
-      const transition = sequence[currentPhase];
+      // Handle complete phase
+      if (currentMain === 'complete') {
+        return;
+      }
+
+      const sequence = this.sequences[currentMain as keyof PhaseSequences];
+
+      if (!sequence) {
+        throw new BreathingError(
+          BreathingErrorType.INVALID_PHASE_TRANSITION,
+          `No sequence defined for main phase ${currentMain}`,
+          { currentState }
+        );
+      }
+
+      const transition = sequence[currentSub];
       if (!transition) {
         throw new BreathingError(
           BreathingErrorType.INVALID_PHASE_TRANSITION,
-          `No transition defined for phase ${currentPhase}`,
+          `No transition defined for sub phase ${currentSub} in ${currentMain}`,
           { currentState }
         );
       }
@@ -44,19 +57,12 @@ export class PhaseManager {
         ? transition.next(currentState)
         : transition.next;
 
-      // Validate the transition
-      validatePhaseTransition(
-        currentPhase,
-        nextPhase,
-        currentState,
-        this.sequences
-      );
-
       // Initialize state updates with required fields
       const updates: Partial<BreathingState> = {
         phase: {
-          current: nextPhase,
-          isRecovery: currentState.phase.isRecovery,
+          main: nextPhase.main,
+          sub: nextPhase.sub,
+          isRecovery: nextPhase.main === 'recover',
           breathCount: currentState.phase.breathCount,
           maxBreaths: currentState.phase.maxBreaths
         },
@@ -67,24 +73,29 @@ export class PhaseManager {
       };
 
       // Handle breath counting
-      if (currentPhase === 'exhale' && !currentState.phase.isRecovery) {
+      if (currentMain === 'breathing' && currentSub === 'exhale') {
         const newBreathCount = currentState.phase.breathCount + 1;
         updates.phase = {
-          current: nextPhase,
+          ...updates.phase,
           breathCount: newBreathCount,
-          isRecovery: newBreathCount >= currentState.phase.maxBreaths,
-          maxBreaths: currentState.phase.maxBreaths
-        };
+        } as BreathingState['phase'];
       }
 
       // Handle round transitions
-      if (currentState.phase.isRecovery && currentPhase === 'recovery_exhale') {
+      if (currentMain === 'recover' && currentSub === 'let_go') {
         if (currentState.session.currentRound >= currentState.session.totalRounds) {
           // Session complete
           updates.session = {
             ...currentState.session,
             isActive: false,
             isPaused: false
+          };
+          updates.phase = {
+            main: 'complete',
+            sub: 'inhale',
+            isRecovery: false,
+            breathCount: 0,
+            maxBreaths: currentState.phase.maxBreaths
           };
         } else {
           // Complete state reset for new round
@@ -94,7 +105,8 @@ export class PhaseManager {
             isPaused: false
           };
           updates.phase = {
-            current: 'inhale',
+            main: 'breathing',
+            sub: 'inhale',
             isRecovery: false,
             breathCount: 0,
             maxBreaths: currentState.phase.maxBreaths
@@ -106,7 +118,6 @@ export class PhaseManager {
           updates.timing = {
             ...currentState.timing
           };
-          return this.onStateChange(updates);
         }
       }
 
@@ -131,16 +142,28 @@ export class PhaseManager {
     currentState: BreathingState,
     progress: number
   ): number {
-    const { current: currentPhase } = currentState.phase;
-    const sequence = currentState.phase.isRecovery 
-      ? this.sequences.recovery 
-      : this.sequences.main;
+    const { main: currentMain, sub: currentSub } = currentState.phase;
 
-    const transition = sequence[currentPhase];
+    // Handle complete phase
+    if (currentMain === 'complete') {
+      return 0;
+    }
+
+    const sequence = this.sequences[currentMain as keyof PhaseSequences];
+
+    if (!sequence) {
+      throw new BreathingError(
+        BreathingErrorType.INVALID_STATE,
+        `No sequence defined for main phase ${currentMain}`,
+        { currentState }
+      );
+    }
+
+    const transition = sequence[currentSub];
     if (!transition) {
       throw new BreathingError(
         BreathingErrorType.INVALID_STATE,
-        `No transition defined for phase ${currentPhase}`,
+        `No transition defined for sub phase ${currentSub} in ${currentMain}`,
         { currentState }
       );
     }
@@ -149,7 +172,7 @@ export class PhaseManager {
       return currentState.animation.lungVolume;
     }
 
-    const startVolume = currentPhase.includes('inhale') ? 0 : 100;
+    const startVolume = currentSub.includes('inhale') ? 0 : 100;
     const endVolume = transition.volume;
 
     return startVolume + (endVolume - startVolume) * progress;

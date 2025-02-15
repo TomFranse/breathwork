@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useBreathing } from '../context/BreathingContext';
-import { BreathingPhase, BreathingError, BreathingErrorType } from '../core/profiles/types';
+import { MainPhase, SubPhase, BreathingError, BreathingErrorType } from '../core/profiles/types';
 import { BreathingTimer } from '../core/timing/BreathingTimer';
 import { RECOVERY_HOLD_TIME } from '../utils/constants';
 
@@ -27,7 +27,7 @@ export function useBreathingTimer() {
   const { state, dispatch, phaseManager } = useBreathing();
   const { 
     session: { isActive, isPaused, currentRound, totalRounds },
-    phase: { current: currentPhase, isRecovery, breathCount, maxBreaths },
+    phase: { main: mainPhase, sub: subPhase, breathCount, maxBreaths },
     animation: { lungVolume }
   } = state;
 
@@ -49,22 +49,26 @@ export function useBreathingTimer() {
   }, [state, phaseManager]);
 
   // Calculate phase duration
-  const getPhaseDuration = useCallback((phase: BreathingPhase): number => {
+  const getPhaseDuration = useCallback((phase: { main: MainPhase, sub: SubPhase }): number => {
+    if (phase.main === 'complete') {
+      return 0;
+    }
+
     const { timing } = stateRef.current;
-    switch (phase) {
+    switch (phase.sub) {
       case 'inhale':
       case 'exhale':
-      case 'recovery_inhale':
-      case 'recovery_exhale':
+      case 'let_go':
         return timing.inhaleTime * 1000;
       case 'hold':
+        if (phase.main === 'recover') {
+          return RECOVERY_HOLD_TIME * 1000;
+        }
         return timing.holdTime * 1000;
-      case 'recovery_hold':
-        return RECOVERY_HOLD_TIME * 1000;
       default:
         throw new BreathingError(
           BreathingErrorType.INVALID_STATE,
-          `Invalid phase: ${phase}`
+          `Invalid phase: ${phase.main}/${phase.sub}`
         );
     }
   }, []);
@@ -77,7 +81,16 @@ export function useBreathingTimer() {
           try {
             const currentState = stateRef.current;
             const currentPhaseManager = phaseManagerRef.current;
-            const phaseDuration = getPhaseDuration(currentState.phase.current);
+
+            // Don't update if in complete phase
+            if (currentState.phase.main === 'complete') {
+              return;
+            }
+
+            const phaseDuration = getPhaseDuration({
+              main: currentState.phase.main,
+              sub: currentState.phase.sub
+            });
             
             // Update debug info
             debugInfoRef.current = {
@@ -108,6 +121,10 @@ export function useBreathingTimer() {
         onComplete: () => {
           try {
             const currentState = stateRef.current;
+            // Don't transition if in complete phase
+            if (currentState.phase.main === 'complete') {
+              return;
+            }
             const currentPhaseManager = phaseManagerRef.current;
             currentPhaseManager.moveToNextPhase(currentState);
           } catch (error) {
@@ -131,15 +148,15 @@ export function useBreathingTimer() {
 
   // Handle timer state
   useEffect(() => {
-    if (!isActive || isPaused) {
-      debugLog('Timer inactive or paused');
+    if (!isActive || isPaused || mainPhase === 'complete') {
+      debugLog('Timer inactive, paused, or complete');
       timerRef.current?.stop();
       return;
     }
 
-    const phaseDuration = getPhaseDuration(currentPhase);
+    const phaseDuration = getPhaseDuration({ main: mainPhase, sub: subPhase });
     debugLog('Starting new phase:', {
-      phase: currentPhase,
+      phase: `${mainPhase}/${subPhase}`,
       duration: phaseDuration / 1000
     });
 
@@ -148,17 +165,17 @@ export function useBreathingTimer() {
     return () => {
       timerRef.current?.stop();
     };
-  }, [isActive, isPaused, currentPhase, getPhaseDuration]);
+  }, [isActive, isPaused, mainPhase, subPhase, getPhaseDuration]);
 
   return {
-    currentPhase,
+    currentPhase: { main: mainPhase, sub: subPhase },
     currentRound,
     totalRounds,
     breathCount,
     maxBreaths,
     isActive,
     isPaused,
-    isRecovery,
+    isRecovery: mainPhase === 'recover',
     lungVolume,
     debugInfo: DEBUG ? debugInfoRef.current : undefined,
   };

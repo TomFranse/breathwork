@@ -1,4 +1,4 @@
-import { BreathingProfile, BreathingState } from './types';
+import { BreathingProfile, BreathingState, MainPhase, SubPhase } from './types';
 
 const WimHofProfile: BreathingProfile = {
   id: 'wim-hof',
@@ -17,56 +17,93 @@ const WimHofProfile: BreathingProfile = {
     return target;
   },
   phaseSequences: {
-    main: {
+    breathing: {
       inhale: {
-        next: 'exhale',
+        next: (state: BreathingState) => ({
+          main: 'breathing',
+          sub: 'exhale'
+        }),
         volume: 100,
       },
       exhale: {
-        next: (state: BreathingState) => 
-          state.phase.breathCount < state.phase.maxBreaths ? 'inhale' : 'hold',
+        next: (state: BreathingState) => ({
+          main: state.phase.breathCount < state.phase.maxBreaths ? 'breathing' : 'hold',
+          sub: state.phase.breathCount < state.phase.maxBreaths ? 'inhale' : 'hold'
+        }),
         volume: 0,
       },
       hold: {
-        next: 'recovery_inhale',
+        next: (state: BreathingState) => ({
+          main: 'recover',
+          sub: 'inhale'
+        }),
         volume: 'maintain',
       },
-      recovery_inhale: {
-        next: 'recovery_hold',
-        volume: 100,
-      },
-      recovery_hold: {
-        next: 'recovery_exhale',
-        volume: 'maintain',
-      },
-      recovery_exhale: {
-        next: 'inhale',
+      let_go: {
+        next: (state: BreathingState) => ({
+          main: 'breathing',
+          sub: 'inhale'
+        }),
         volume: 0,
       },
     },
-    recovery: {
+    hold: {
       inhale: {
-        next: 'exhale',
+        next: (state: BreathingState) => ({
+          main: 'hold',
+          sub: 'hold'
+        }),
         volume: 100,
       },
       exhale: {
-        next: 'inhale',
+        next: (state: BreathingState) => ({
+          main: 'hold',
+          sub: 'hold'
+        }),
         volume: 0,
       },
       hold: {
-        next: 'recovery_inhale',
+        next: (state: BreathingState) => ({
+          main: 'recover',
+          sub: 'inhale'
+        }),
         volume: 'maintain',
       },
-      recovery_inhale: {
-        next: 'recovery_hold',
+      let_go: {
+        next: (state: BreathingState) => ({
+          main: 'breathing',
+          sub: 'inhale'
+        }),
+        volume: 0,
+      },
+    },
+    recover: {
+      inhale: {
+        next: (state: BreathingState) => ({
+          main: 'recover',
+          sub: 'hold'
+        }),
         volume: 100,
       },
-      recovery_hold: {
-        next: 'recovery_exhale',
+      exhale: {
+        next: (state: BreathingState) => ({
+          main: 'breathing',
+          sub: 'inhale'
+        }),
+        volume: 0,
+      },
+      hold: {
+        next: (state: BreathingState) => ({
+          main: 'recover',
+          sub: 'let_go'
+        }),
         volume: 'maintain',
       },
-      recovery_exhale: {
-        next: 'inhale',
+      let_go: {
+        next: (state: BreathingState) => ({
+          main: state.session.currentRound < state.session.totalRounds ? 'breathing' : 'complete',
+          sub: 'inhale'
+        }),
         volume: 0,
       },
     },

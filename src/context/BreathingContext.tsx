@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useReducer, ReactNode, useRef, useCallback } from 'react';
 import { 
   BreathingState, 
-  BreathingSettings, 
-  BreathingPhase,
+  BreathingSettings,
+  MainPhase,
+  SubPhase,
   BreathingError,
   BreathingErrorType,
   PhaseSequences
@@ -21,7 +22,8 @@ const initialState: BreathingState = {
     totalRounds: DEFAULT_BREATHING_SETTINGS.numberOfRounds,
   },
   phase: {
-    current: 'inhale',
+    main: 'breathing',
+    sub: 'inhale',
     isRecovery: false,
     breathCount: 0,
     maxBreaths: DEFAULT_BREATHING_SETTINGS.breathsBeforeHold,
@@ -85,7 +87,8 @@ function breathingReducer(state: BreathingState, action: Action): BreathingState
           },
           phase: {
             ...state.phase,
-            current: 'inhale',
+            main: 'breathing',
+            sub: 'inhale',
             isRecovery: false,
             breathCount: 0,
           },
@@ -137,8 +140,8 @@ function breathingReducer(state: BreathingState, action: Action): BreathingState
 
     // Only validate transitions when phase changes
     if (action.type === 'UPDATE_STATE' && 
-        action.payload.phase?.current !== undefined && 
-        action.payload.phase.current !== state.phase.current) {
+        action.payload.phase?.main !== undefined && 
+        action.payload.phase.main !== state.phase.main) {
       validateStateTransition(state, newState, WimHofProfile.phaseSequences);
     }
 
