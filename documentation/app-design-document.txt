@@ -1,0 +1,116 @@
+App Design Document – Breathwork Timer App
+Author: UX/UI Designer / Product Designer
+Standard: IEEE 830-1998 (Software Requirements Specification)
+
+1. Introduction
+1.1 Purpose
+The Breathwork Timer App is a simple web application that guides users through breathing exercises using visual animations and sound cues. Users can set their breathing patterns and start a session where a soft wave or bell sound accompanies them.
+
+The app is designed for stress reduction, meditation, and breathing techniques such as Wim Hof, box breathing, and pranayama.
+
+1.2 Scope
+Purely frontend application, built in React.
+Uses MUI (Material UI) for all UI components.
+Hosted via Firebase, allowing for fast deployment and PWA support.
+Smooth transitions and a calming user experience.
+Mobile-friendly layout, optimized for both smartphones and desktops.
+2. Functional Specifications
+2.1 Settings Page
+Configurable parameters:
+- Breaths before Hold – Number of breath cycles before entering hold phase
+- Inhale/Exhale Time (seconds) – Duration for each inhale and exhale phase
+- Breath Hold Target (seconds) – Maximum breath hold time (achieved in final round)
+- Number of Rounds – How many complete sequences to perform
+
+Automatic adjustments:
+The app automatically calculates the breath hold time progression:
+- First round: ⅓ of target hold time
+- Second round: ⅔ of target hold time
+- Final round: Full target hold time
+
+Round Sequence:
+1. Main Breathing Phase:
+   - Repeat for [Breaths before Hold] times:
+     * Inhale (duration: Inhale/Exhale Time)
+     * Exhale (duration: Inhale/Exhale Time)
+2. Hold Sequence:
+   - Hold breath (duration: calculated based on round)
+   - Inhale (duration: Inhale/Exhale Time)
+   - Hold breath (duration: 15 seconds, fixed)
+   - Exhale (duration: Inhale/Exhale Time)
+
+Interactions:
+Play button: Starts the breathing session
+Pause button: Allows the user to pause and resume the session
+Stop button: Ends the session and returns to the settings page
+2.2 Breathing Timer Page
+Visual guidance:
+Expanding and contracting circle (smooth animated transitions) as a breathing indicator.
+Progress bar or subtle indicator showing how many rounds remain.
+Auditory guidance:
+Soft wave or bell sound as a cue.
+Dynamic sound cues based on the phase:
+Inhalation → Soft rising tone.
+Exhalation → Soft fading tone.
+Breath hold → Silent or subtle tone.
+3. UI/UX Design
+3.1 Color Scheme
+The UI follows soft, calming pastel colors with contrast dynamics for focus.
+
+Proposed color theme:
+Background: Soft lavender blue (#D6E2F0) for a soothing base.
+Primary components: Pastel peach (#F9DCC4) and mint green (#B8E0D2).
+Interactive elements (buttons, progress bar): Deep teal (#4B908D) for contrast.
+Text and icons: Soft dark gray (#3A3A3A) for readability.
+3.2 Layout
+Mobile-first design, but well-scaled for desktops.
+
+Settings Page:
+MUI Slider components for adjusting breath timing.
+MUI Switch buttons for options such as enabling/disabling sounds.
+MUI Play button centrally placed and highly visible.
+Breathing Timer Page:
+Large centered animation circle.
+Clear play/pause/stop buttons at the bottom.
+Soft transitions and fading effects between phases.
+4. Technical Specifications
+4.1 Technology Stack
+Framework: React.js (Create React App)
+UI: Material UI (MUI v5)
+Animations: Framer Motion
+Audio: Tone.js for synthesized breathing sounds
+State Management: React Context
+Testing: Jest + React Testing Library
+Hosting: Firebase Hosting (deployment setup in later phase)
+
+4.2 Application Logic
+Timer-based state management with React Hooks (useState, useEffect)
+Pause/Resume logic: Timer is temporarily stopped and resumes upon button click
+End of session: Automatic return to the settings page
+Audio synthesis:
+- Rising sine wave for inhale
+- Falling sine wave for exhale
+- Subtle drone for breath hold
+Fixed breath hold progression (⅓, ⅔, full) per round
+
+5. Testing & Deployment
+5.1 Development & Testing
+Jest and React Testing Library for:
+- Timer logic
+- State management
+- Component rendering
+- User interactions
+Mobile responsiveness testing via Chrome DevTools and Lighthouse
+
+5.2 Deployment
+Initial local development setup
+Firebase deployment configuration in later phase
+
+6. Future Enhancements
+Progressive Web App (PWA) support
+Additional breathing techniques (e.g., box breathing)
+Sound selection option (e.g., custom bell or nature sounds)
+Extra visualizations such as a moving wave instead of a circle
+Social sharing feature
+Firebase CI/CD setup
+Storybook integration for component development
