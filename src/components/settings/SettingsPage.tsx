@@ -6,7 +6,11 @@ import { useBreathing } from '../../context/BreathingContext';
 
 export function SettingsPage() {
   const { state, dispatch } = useBreathing();
-  const { settings } = state;
+  const { 
+    phase: { maxBreaths },
+    timing: { inhaleTime, holdTime },
+    session: { totalRounds }
+  } = state;
 
   const handleStart = () => {
     dispatch({ type: 'START_SESSION' });
@@ -35,7 +39,7 @@ export function SettingsPage() {
         <Box sx={{ width: '100%' }}>
           <BreathingSlider
             label="Breaths before Hold"
-            value={settings.breathsBeforeHold}
+            value={maxBreaths}
             min={20}
             max={50}
             settingKey="breathsBeforeHold"
@@ -43,7 +47,7 @@ export function SettingsPage() {
 
           <BreathingSlider
             label="Inhale/Exhale Time"
-            value={settings.inhaleExhaleTime}
+            value={inhaleTime}
             min={1}
             max={5}
             step={0.5}
@@ -53,7 +57,7 @@ export function SettingsPage() {
 
           <BreathingSlider
             label="Breath Hold Target"
-            value={settings.breathHoldTarget}
+            value={holdTime}
             min={30}
             max={180}
             step={5}
@@ -63,7 +67,7 @@ export function SettingsPage() {
 
           <BreathingSlider
             label="Number of Rounds"
-            value={settings.numberOfRounds}
+            value={totalRounds}
             min={1}
             max={5}
             settingKey="numberOfRounds"

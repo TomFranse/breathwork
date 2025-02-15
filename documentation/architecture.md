@@ -1,127 +1,211 @@
 # Breathwork Timer App - Architecture Document
 
-## 1. Component Structure
+## 1. Core Concepts
+
+### 1.1 Breathing Profiles
+```typescript
+interface BreathingProfile {
+  name: string;
+  description: string;
+  defaultSettings: BreathingSettings;
+  holdTimeProgression: (round: number, total: number, target: number) => number;
+}
+```
+Predefined breathing techniques (e.g., Wim Hof, Box Breathing) with their specific parameters and progression logic.
+
+### 1.2 State Management
+The app uses a hierarchical state management approach:
+1. **Session State**: Overall breathing session status
+2. **Phase State**: Current breathing phase and its parameters
+3. **Timer State**: Precise timing and animation control
+4. **Settings State**: User-configurable parameters
+
+### 1.3 Phase Sequences
+Declaratively defined phase transitions:
+```typescript
+const PHASE_SEQUENCES = {
+  main: {
+    inhale: { next: 'exhale', volume: 100 },
+    exhale: { next: (state) => state.currentBreath < state.maxBreaths ? 'inhale' : 'hold', volume: 0 },
+    hold: { next: 'recovery_inhale', volume: 'maintain' }
+  },
+  recovery: {
+    recovery_inhale: { next: 'recovery_hold', volume: 100 },
+    recovery_hold: { next: 'recovery_exhale', volume: 'maintain' },
+    recovery_exhale: { next: 'inhale', volume: 0 }
+  }
+}
+```
+
+## 2. Component Structure
 
 ```
 src/
 ├── components/
-│   ├── App.tsx                    # Main application component
+│   ├── breathing/
+│   │   ├── BreathingCircle.tsx       # Visual breathing indicator
+│   │   ├── PhaseIndicator.tsx        # Current phase display
+│   │   ├── ProgressBar.tsx           # Session progress
+│   │   └── Controls.tsx              # Playback controls
 │   ├── settings/
-│   │   ├── SettingsPage.tsx      # Settings configuration page
-│   │   ├── BreathingSlider.tsx   # Custom slider for breathing settings
-│   │   └── RoundCounter.tsx      # Round configuration component
-│   ├── timer/
-│   │   ├── TimerPage.tsx         # Breathing session page
-│   │   ├── BreathingCircle.tsx   # Animated breathing indicator
-│   │   ├── ProgressBar.tsx       # Session progress indicator
-│   │   └── Controls.tsx          # Play/Pause/Stop controls
+│   │   ├── SettingsPage.tsx          # Settings configuration
+│   │   ├── ProfileSelector.tsx       # Breathing profile selection
+│   │   └── ParameterSliders.tsx      # Breathing parameters
 │   └── common/
-│       ├── Button.tsx            # Reusable button component
-│       └── Layout.tsx            # Common layout wrapper
-├── context/
-│   ├── BreathingContext.tsx      # Global state management
-│   └── AudioContext.tsx          # Audio state and controls
+│       ├── Layout.tsx                # Common layout wrapper
+│       └── ErrorBoundary.tsx         # Error handling
+├── core/
+│   ├── profiles/
+│   │   ├── types.ts                  # Profile type definitions
+│   │   ├── WimHof.ts                # Wim Hof method profile
+│   │   └── BoxBreathing.ts          # Box breathing profile
+│   ├── timing/
+│   │   ├── BreathingTimer.ts        # Timer management
+│   │   └── AnimationController.ts    # Animation control
+│   └── state/
+│       ├── BreathingContext.tsx      # Global state
+│       ├── PhaseManager.ts           # Phase transitions
+│       └── StateValidator.ts         # State validation
 ├── hooks/
-│   ├── useBreathingTimer.ts      # Timer logic and state
-│   ├── useBreathingSound.ts      # Sound synthesis with Tone.js
-│   └── useBreathingAnimation.ts  # Animation control hooks
-├── utils/
-│   ├── timerCalculations.ts      # Timer-related calculations
-│   ├── soundUtils.ts             # Sound-related utilities
-│   └── constants.ts              # App-wide constants
-└── types/
-    └── index.ts                  # TypeScript type definitions
+│   ├── useBreathingTimer.ts          # Timer logic
+│   ├── useBreathingAnimation.ts      # Animation hooks
+│   └── useBreathingState.ts          # State management
+└── utils/
+    ├── constants.ts                   # App constants
+    ├── validators.ts                  # Input validation
+    └── debug.ts                       # Debug utilities
 ```
 
-## 2. Data Flow
+## 3. State Management
 
-### 2.1 Context Structure
+### 3.1 BreathingState Interface
 ```typescript
 interface BreathingState {
-  settings: {
-    breathHold: number;
-    breathsPerCycle: number;
-    numberOfRounds: number;
-  };
   session: {
-    currentRound: number;
-    currentPhase: 'inhale' | 'exhale' | 'hold';
     isActive: boolean;
     isPaused: boolean;
+    currentRound: number;
+    totalRounds: number;
+  };
+  phase: {
+    current: BreathingPhase;
+    isRecovery: boolean;
+    breathCount: number;
+    maxBreaths: number;
+  };
+  timing: {
+    inhaleTime: number;
+    exhaleTime: number;
+    holdTime: number;
+    recoveryTime: number;
+  };
+  animation: {
+    lungVolume: number;
+    progress: number;
   };
 }
 ```
 
-### 2.2 State Management Flow
-1. Settings Page → BreathingContext
-2. BreathingContext → Timer Logic
-3. Timer Logic → Audio & Animation
-4. Timer Logic → UI Updates
+### 3.2 State Updates
+- Atomic updates using action creators
+- Validation before state changes
+- Debug tracking of state transitions
 
-## 3. Core Features Implementation
+## 4. Timer Management
 
-### 3.1 Timer Logic
-- Managed by `useBreathingTimer` hook
-- Calculates breath hold progression (⅓, ⅔, full)
-- Handles pause/resume/stop functionality
-- Emits current phase and timing
+### 4.1 BreathingTimer Class
+```typescript
+class BreathingTimer {
+  start(duration: number, onTick: (progress: number) => void, onComplete: () => void): void;
+  pause(): void;
+  resume(): void;
+  stop(): void;
+  getProgress(): number;
+}
+```
 
-### 3.2 Audio System
-- Managed by `useBreathingSound` hook
-- Uses Tone.js for sound synthesis
-- Syncs with breathing phases:
-  - Inhale: Rising sine wave (frequency: 200Hz → 400Hz)
-  - Exhale: Falling sine wave (400Hz → 200Hz)
-  - Hold: Low drone (100Hz)
+### 4.2 Animation Control
+- RAF-based smooth animations
+- Precise progress tracking
+- Cleanup on component unmount
 
-### 3.3 Animation System
-- Uses Framer Motion for smooth transitions
-- Breathing circle scales with breath phases
-- Progress indicators update in real-time
+## 5. Error Handling
 
-## 4. Testing Strategy
+### 5.1 Error Types
+```typescript
+enum BreathingErrorType {
+  INVALID_PHASE_TRANSITION = 'INVALID_PHASE_TRANSITION',
+  TIMER_SYNC_ERROR = 'TIMER_SYNC_ERROR',
+  INVALID_STATE = 'INVALID_STATE',
+  ANIMATION_ERROR = 'ANIMATION_ERROR'
+}
+```
 
-### 4.1 Unit Tests
-- Timer calculations
+### 5.2 Error Boundaries
+- Component-level error catching
+- State recovery mechanisms
+- User-friendly error messages
+
+## 6. Debug & Development
+
+### 6.1 State Tracking
+```typescript
+interface StateSnapshot {
+  timestamp: number;
+  state: BreathingState;
+  action?: string;
+  error?: Error;
+}
+```
+
+### 6.2 Development Tools
+- State history tracking
+- Performance monitoring
+- Visual debugging overlay
+
+## 7. Testing Strategy
+
+### 7.1 Unit Tests
 - State transitions
-- Context updates
-- Utility functions
+- Timer accuracy
+- Animation smoothness
 
-### 4.2 Integration Tests
-- Timer + Audio synchronization
-- User interactions
-- State management flow
+### 7.2 Integration Tests
+- Complete breathing sequences
+- Profile switching
+- Error recovery
 
-### 4.3 Component Tests
-- Render testing
-- User interaction testing
-- Animation presence
+### 7.3 Mock Utilities
+```typescript
+class MockBreathingTimer {
+  simulateProgress(progress: number): void;
+  simulateError(error: BreathingErrorType): void;
+  simulateComplete(): void;
+}
+```
 
-## 5. Performance Considerations
+## 8. Performance Considerations
 
-### 5.1 Optimizations
-- Use `React.memo()` for static components
-- Implement `useCallback` for event handlers
-- Utilize `useMemo` for complex calculations
-- Lazy load secondary features
+### 8.1 Optimizations
+- Memoized calculations
+- RAF-based animations
+- Efficient state updates
 
-### 5.2 Audio Performance
-- Initialize Tone.js on user interaction
-- Clean up audio resources on component unmount
-- Handle audio context suspension during pause
+### 8.2 Memory Management
+- Proper cleanup of timers
+- Animation frame cancellation
+- State cleanup on session end
 
-## 6. Accessibility
+## 9. Future Enhancements
 
-### 6.1 Features
-- ARIA labels for all interactive elements
-- Keyboard navigation support
-- Visual feedback for all interactions
-- Screen reader support for timer states
+### 9.1 Planned Features
+- Custom breathing profiles
+- Progress tracking
+- Social sharing
+- Offline support
 
-## 7. Error Handling
-
-### 7.1 Strategies
-- Graceful audio fallback
-- Timer sync recovery
-- State persistence for unexpected closes
-- Clear error messages for users 
+### 9.2 Technical Improvements
+- PWA implementation
+- Performance monitoring
+- Analytics integration
+- Cloud sync 

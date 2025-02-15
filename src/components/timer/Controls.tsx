@@ -2,11 +2,10 @@ import React from 'react';
 import { Box, IconButton, Tooltip } from '@mui/material';
 import { PlayArrow, Pause, Stop } from '@mui/icons-material';
 import { useBreathing } from '../../context/BreathingContext';
-import { useBreathingTimer } from '../../hooks/useBreathingTimer';
 
 export function Controls() {
-  const { dispatch } = useBreathing();
-  const { isActive, isPaused } = useBreathingTimer();
+  const { state, dispatch } = useBreathing();
+  const { isActive, isPaused } = state.session;
 
   const handlePlayPause = () => {
     if (isPaused) {

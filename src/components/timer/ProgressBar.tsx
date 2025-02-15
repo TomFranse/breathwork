@@ -1,14 +1,10 @@
 import React from 'react';
 import { Box, LinearProgress, Typography } from '@mui/material';
 import { useBreathingTimer } from '../../hooks/useBreathingTimer';
-import { useBreathing } from '../../context/BreathingContext';
 
 export function ProgressBar() {
-  const { currentRound } = useBreathingTimer();
-  const { state } = useBreathing();
-  const { numberOfRounds } = state.settings;
-
-  const progress = (currentRound / numberOfRounds) * 100;
+  const { currentRound, totalRounds } = useBreathingTimer();
+  const progress = (currentRound / totalRounds) * 100;
 
   return (
     <Box sx={{ width: '100%', mb: 4 }}>
@@ -18,7 +14,7 @@ export function ProgressBar() {
         mb: 1,
       }}>
         <Typography variant="body2" color="text.secondary">
-          Round {currentRound} of {numberOfRounds}
+          Round {currentRound} of {totalRounds}
         </Typography>
         <Typography variant="body2" color="text.secondary">
           {Math.round(progress)}%

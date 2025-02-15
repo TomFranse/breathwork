@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Slider, Typography } from '@mui/material';
 import { useBreathing } from '../../context/BreathingContext';
+import { BreathingSettings } from '../../core/profiles/types';
 
 interface BreathingSliderProps {
   label: string;
@@ -9,7 +10,7 @@ interface BreathingSliderProps {
   max: number;
   step?: number;
   unit?: string;
-  settingKey: 'breathsBeforeHold' | 'inhaleExhaleTime' | 'breathHoldTarget' | 'numberOfRounds';
+  settingKey: keyof BreathingSettings;
 }
 
 export function BreathingSlider({
@@ -21,13 +22,51 @@ export function BreathingSlider({
   unit = '',
   settingKey,
 }: BreathingSliderProps) {
-  const { dispatch } = useBreathing();
+  const { state, dispatch } = useBreathing();
 
   const handleChange = (_event: Event, newValue: number | number[]) => {
-    dispatch({
-      type: 'UPDATE_SETTINGS',
-      payload: { [settingKey]: newValue as number },
-    });
+    const value = newValue as number;
+    
+    // Create the appropriate state update based on the setting key
+    const update = {
+      type: 'UPDATE_STATE' as const,
+      payload: (() => {
+        switch (settingKey) {
+          case 'breathsBeforeHold':
+            return {
+              phase: {
+                ...state.phase,
+                maxBreaths: value
+              }
+            };
+          case 'inhaleExhaleTime':
+            return {
+              timing: {
+                ...state.timing,
+                inhaleTime: value,
+                exhaleTime: value,
+                recoveryTime: value
+              }
+            };
+          case 'breathHoldTarget':
+            return {
+              timing: {
+                ...state.timing,
+                holdTime: value
+              }
+            };
+          case 'numberOfRounds':
+            return {
+              session: {
+                ...state.session,
+                totalRounds: value
+              }
+            };
+        }
+      })()
+    };
+
+    dispatch(update);
   };
 
   return (

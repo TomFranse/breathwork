@@ -2,7 +2,6 @@ import React from 'react';
 import { Box, Typography, Paper } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useBreathingTimer } from '../../hooks/useBreathingTimer';
-import { useBreathing } from '../../context/BreathingContext';
 
 const CIRCLE_SIZE = {
   min: 200,
@@ -25,8 +24,19 @@ const getPhaseLabel = (phase: string, isRecovery: boolean): string => {
   return phase.charAt(0).toUpperCase() + phase.slice(1);
 };
 
-const DebugOverlay = ({ debugInfo, phase, breath, maxBreaths, lungVolume }: {
-  debugInfo: any;
+const DebugOverlay = ({ 
+  debugInfo, 
+  phase, 
+  breath, 
+  maxBreaths, 
+  lungVolume 
+}: {
+  debugInfo: {
+    elapsedTime: number;
+    phaseDuration: number;
+    progress: number;
+    nextPhaseIn: number;
+  };
   phase: string;
   breath: number;
   maxBreaths: number;
@@ -55,13 +65,13 @@ const DebugOverlay = ({ debugInfo, phase, breath, maxBreaths, lungVolume }: {
         Lung Volume: {Math.round(lungVolume)}%
       </Typography>
       <Typography variant="caption">
-        Progress: {(debugInfo?.progress * 100 || 0).toFixed(1)}%
+        Progress: {(debugInfo.progress * 100).toFixed(1)}%
       </Typography>
       <Typography variant="caption">
-        Time Left: {((debugInfo?.nextPhaseIn || 0) / 1000).toFixed(1)}s
+        Time Left: {(debugInfo.nextPhaseIn / 1000).toFixed(1)}s
       </Typography>
       <Typography variant="caption">
-        Duration: {((debugInfo?.phaseDuration || 0) / 1000).toFixed(1)}s
+        Duration: {(debugInfo.phaseDuration / 1000).toFixed(1)}s
       </Typography>
     </Box>
   </Paper>
@@ -70,16 +80,13 @@ const DebugOverlay = ({ debugInfo, phase, breath, maxBreaths, lungVolume }: {
 export function BreathingCircle() {
   const { 
     currentPhase, 
-    currentBreath,
+    breathCount,
+    maxBreaths,
     isPaused, 
-    phaseTimings,
-    isInRecoveryPhase,
+    isRecovery,
     lungVolume,
     debugInfo,
   } = useBreathingTimer();
-
-  const { state } = useBreathing();
-  const { breathsBeforeHold } = state.settings;
 
   return (
     <Box
@@ -98,8 +105,8 @@ export function BreathingCircle() {
         <DebugOverlay
           debugInfo={debugInfo}
           phase={currentPhase}
-          breath={currentBreath}
-          maxBreaths={breathsBeforeHold}
+          breath={breathCount}
+          maxBreaths={maxBreaths}
           lungVolume={lungVolume}
         />
       )}
@@ -143,7 +150,7 @@ export function BreathingCircle() {
               textTransform: 'capitalize',
             }}
           >
-            {isPaused ? 'Paused' : getPhaseLabel(currentPhase, isInRecoveryPhase)}
+            {isPaused ? 'Paused' : getPhaseLabel(currentPhase, isRecovery)}
           </Typography>
           <AnimatePresence mode="wait">
             <motion.div
@@ -164,9 +171,9 @@ export function BreathingCircle() {
                   'Press play to continue'
                 ) : (
                   <>
-                    {phaseTimings[currentPhase]}s
-                    {!isInRecoveryPhase && !currentPhase.includes('hold') && (
-                      <span> • Breath {currentBreath}/{breathsBeforeHold}</span>
+                    {debugInfo && `${(debugInfo.phaseDuration / 1000).toFixed(1)}s`}
+                    {!isRecovery && !currentPhase.includes('hold') && (
+                      <span> • Breath {breathCount}/{maxBreaths}</span>
                     )}
                   </>
                 )}
