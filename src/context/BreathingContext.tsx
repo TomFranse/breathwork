@@ -12,6 +12,7 @@ const initialState: BreathingState = {
     isActive: false,
     isPaused: false,
     isInRecoveryPhase: false,
+    lungVolume: 0, // Start with empty lungs
   },
 };
 
@@ -26,7 +27,8 @@ type Action =
   | { type: 'UPDATE_ROUND'; payload: number }
   | { type: 'INCREMENT_BREATH' }
   | { type: 'RESET_BREATH' }
-  | { type: 'SET_RECOVERY_PHASE'; payload: boolean };
+  | { type: 'SET_RECOVERY_PHASE'; payload: boolean }
+  | { type: 'SET_LUNG_VOLUME'; payload: number };
 
 // Reducer
 function breathingReducer(state: BreathingState, action: Action): BreathingState {
@@ -47,6 +49,7 @@ function breathingReducer(state: BreathingState, action: Action): BreathingState
           currentPhase: 'inhale',
           currentBreath: 1,
           isInRecoveryPhase: false,
+          lungVolume: 0, // Start with empty lungs
         },
       };
     case 'PAUSE_SESSION':
@@ -70,6 +73,7 @@ function breathingReducer(state: BreathingState, action: Action): BreathingState
           currentPhase: 'inhale',
           currentBreath: 1,
           isInRecoveryPhase: false,
+          lungVolume: 0,
         },
       };
     case 'UPDATE_PHASE':
@@ -109,6 +113,14 @@ function breathingReducer(state: BreathingState, action: Action): BreathingState
         session: {
           ...state.session,
           isInRecoveryPhase: action.payload,
+        },
+      };
+    case 'SET_LUNG_VOLUME':
+      return {
+        ...state,
+        session: {
+          ...state.session,
+          lungVolume: Math.max(0, Math.min(100, action.payload)), // Clamp between 0-100
         },
       };
     default:

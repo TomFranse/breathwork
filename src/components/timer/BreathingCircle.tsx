@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, Paper } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useBreathingTimer } from '../../hooks/useBreathingTimer';
 import { useBreathing } from '../../context/BreathingContext';
@@ -9,49 +9,11 @@ const CIRCLE_SIZE = {
   max: 400,
 };
 
-const animationVariants = {
-  inhale: {
-    scale: 1,
-    transition: {
-      duration: 2,
-      ease: 'easeInOut',
-    },
-  },
-  exhale: {
-    scale: 0.5,
-    transition: {
-      duration: 2,
-      ease: 'easeInOut',
-    },
-  },
-  hold: {
-    scale: 0.5,
-    transition: {
-      duration: 0.1,
-      ease: 'linear',
-    },
-  },
-  recovery_inhale: {
-    scale: 1,
-    transition: {
-      duration: 2,
-      ease: 'easeInOut',
-    },
-  },
-  recovery_hold: {
-    scale: 0.5,
-    transition: {
-      duration: 0.1,
-      ease: 'linear',
-    },
-  },
-  recovery_exhale: {
-    scale: 0.5,
-    transition: {
-      duration: 2,
-      ease: 'easeInOut',
-    },
-  },
+// Scale factor calculation based on lung volume (0-100)
+const getLungScale = (volume: number) => {
+  const minScale = 0.5; // 50% of size when empty
+  const maxScale = 1.0; // 100% of size when full
+  return minScale + (maxScale - minScale) * (volume / 100);
 };
 
 const getPhaseLabel = (phase: string, isRecovery: boolean): string => {
@@ -63,6 +25,44 @@ const getPhaseLabel = (phase: string, isRecovery: boolean): string => {
   return phase.charAt(0).toUpperCase() + phase.slice(1);
 };
 
+const DebugOverlay = ({ debugInfo, phase, breath, maxBreaths }: {
+  debugInfo: any;
+  phase: string;
+  breath: number;
+  maxBreaths: number;
+}) => (
+  <Paper
+    sx={{
+      position: 'absolute',
+      top: '20px',
+      right: '20px',
+      padding: 2,
+      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+      zIndex: 1000,
+      minWidth: '200px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 1,
+    }}
+  >
+    <Typography variant="subtitle2" color="primary">Debug Info</Typography>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+      <Typography variant="caption">
+        Phase: {phase} ({breath}/{maxBreaths})
+      </Typography>
+      <Typography variant="caption">
+        Progress: {(debugInfo?.progress * 100 || 0).toFixed(1)}%
+      </Typography>
+      <Typography variant="caption">
+        Time Left: {((debugInfo?.nextPhaseIn || 0) / 1000).toFixed(1)}s
+      </Typography>
+      <Typography variant="caption">
+        Duration: {((debugInfo?.phaseDuration || 0) / 1000).toFixed(1)}s
+      </Typography>
+    </Box>
+  </Paper>
+);
+
 export function BreathingCircle() {
   const { 
     currentPhase, 
@@ -70,22 +70,17 @@ export function BreathingCircle() {
     isPaused, 
     phaseTimings,
     isInRecoveryPhase,
+    lungVolume,
+    debugInfo,
   } = useBreathingTimer();
 
   const { state } = useBreathing();
   const { breathsBeforeHold } = state.settings;
 
-  const currentAnimation = {
-    scale: animationVariants[currentPhase].scale,
-    transition: {
-      ...animationVariants[currentPhase].transition,
-      duration: isPaused ? 0 : phaseTimings[currentPhase],
-    },
-  };
-
   return (
     <Box
       sx={{
+        position: 'relative',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
@@ -95,9 +90,22 @@ export function BreathingCircle() {
         gap: 3,
       }}
     >
+      {debugInfo && (
+        <DebugOverlay
+          debugInfo={debugInfo}
+          phase={currentPhase}
+          breath={currentBreath}
+          maxBreaths={breathsBeforeHold}
+        />
+      )}
       <motion.div
-        animate={currentAnimation}
-        initial="exhale"
+        animate={{
+          scale: getLungScale(lungVolume)
+        }}
+        transition={{
+          duration: 0.016, // Approximately 1 frame at 60fps
+          ease: "linear"
+        }}
         style={{
           width: CIRCLE_SIZE.min,
           height: CIRCLE_SIZE.min,
